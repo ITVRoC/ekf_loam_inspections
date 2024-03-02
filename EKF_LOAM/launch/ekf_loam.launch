@@ -4,7 +4,7 @@
     <arg name = "rviz_p" value = "true" /> 
     <arg name = "velodyne"    value = "true" />
     <arg name = "d435i" value = "false" />
-    <param name = "/use_sim_time" value = "false" /> <!-- use true for simulation simGetSimulationTime -->
+    <param name = "/use_sim_time" value = "true" /> <!-- use true for simulation simGetSimulationTime -->
 
     <!--- param -->
     <rosparam command="load" file="$(find ekf_loam)/config/ekf_loam_parameters.yaml" /> 
