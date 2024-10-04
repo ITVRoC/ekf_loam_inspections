@@ -1,15 +1,14 @@
 <launch>
-    
     <!--- Simulate Time Parameters -->   
     <arg name = "rviz_p" value = "true" /> 
     <arg name = "velodyne"    value = "true" />
     <arg name = "d435i" value = "false" />
-    <param name = "/use_sim_time" value = "true" /> <!-- use true for simulation simGetSimulationTime -->
+    <param name = "/use_sim_time" value = "false" /> <!-- use true for simulation simGetSimulationTime -->
 
     <!--- param -->
     <rosparam command="load" file="$(find ekf_loam)/config/ekf_loam_parameters.yaml" /> 
-    <!--rosparam command="load" file="$(find ekf_loam)/config/os1_32_parameters.yaml" /-->
-    <rosparam command="load" file="$(find ekf_loam)/config/vlp_16_parameters.yaml" />
+    <rosparam command="load" file="$(find ekf_loam)/config/os1_32_parameters.yaml" />
+    <!--rosparam command="load" file="$(find ekf_loam)/config/vlp_16_parameters.yaml" /-->
     <rosparam command="load" file="$(find adaptive_filter)/config/adaptive_filter_parameters.yaml" />
 
     <!-- TFs -->
