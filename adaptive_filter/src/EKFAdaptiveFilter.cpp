@@ -298,6 +298,41 @@ public:
         S = H*P*H.transpose() + E;
         K = P*H.transpose()*S.inverse();
 
+        // correction - new
+        Eigen::VectorXd KR(N_STATES);
+        KR = K*(Y - hx);
+
+        X.block(0,0,3,1) = X.block(0,0,3,1) + KR.block(0,0,3,1);
+        X(3) = atan2(sin(X(3) + KR(3)), cos(X(3) + KR(3)));
+        X(4) = atan2(sin(X(4) + KR(4)), cos(X(4) + KR(4)));
+        X(5) = atan2(sin(X(5) + KR(5)), cos(X(5) + KR(5)));
+        X.block(6,0,6,1) = X.block(6,0,6,1) + KR.block(6,0,6,1);
+
+        // X = X + K*(Y - hx); // old
+        P = P - K*H*P;
+    }
+
+    void correction_imu_stage_old(double dt){
+        Eigen::Matrix3d S, E;
+        Eigen::Vector3d Y, hx;
+        Eigen::MatrixXd H(3,N_STATES), K(N_STATES,3);
+
+        // measure model
+        hx = X.block(9,0,3,1);
+        // wheel measurement
+        Y = imuMeasure.block(3,0,3,1);
+
+        // Jacobian of hx with respect to the states
+        H = Eigen::MatrixXd::Zero(3,N_STATES);
+        H.block(0,9,3,3) = Eigen::MatrixXd::Identity(3,3);
+
+        // covariance matrices
+        E = E_imu.block(3,3,3,3);
+
+        // Kalman's gain
+        S = H*P*H.transpose() + E;
+        K = P*H.transpose()*S.inverse();
+
         // correction
         X = X + K*(Y - hx);
         P = P - K*H*P;
@@ -310,8 +345,8 @@ public:
 
         // measure model
         hx = X.block(3,0,3,1);
-        // wheel measurement
-        Y = imuMeasure.block(6,0,3,1);
+        // IMU measurement
+        Y = imuMeasure.block(6,0,3,1); // roll pitch yaw
 
         // Jacobian of hx with respect to the states
         H = Eigen::MatrixXd::Zero(3,N_STATES);
@@ -324,8 +359,21 @@ public:
         S = H*P*H.transpose() + E;
         K = P*H.transpose()*S.inverse();
 
-        // correction
-        X = X + K*(Y - hx);
+        // correction - state
+        Eigen::VectorXd residues(3), KR(N_STATES);
+        residues(0) = atan2(sin(Y(0) - hx(0)), cos(Y(0) - hx(0)));
+        residues(1) = atan2(sin(Y(1) - hx(1)), cos(Y(1) - hx(1)));
+        residues(2) = atan2(sin(Y(2) - hx(2)), cos(Y(2) - hx(2)));
+        KR = K*residues;
+
+        X.block(0,0,3,1) = X.block(0,0,3,1) + KR.block(0,0,3,1);
+        X(3) = atan2(sin(X(3) + KR(3)), cos(X(3) + KR(3)));
+        X(4) = atan2(sin(X(4) + KR(4)), cos(X(4) + KR(4)));
+        X(5) = atan2(sin(X(5) + KR(5)), cos(X(5) + KR(5)));
+        X.block(6,0,6,1) = X.block(6,0,6,1) + KR.block(6,0,6,1);
+
+        // X = X + K*(Y - hx); 
+        // correction - covariance
         P = P - K*H*P;
     }
 
@@ -357,8 +405,17 @@ public:
         S = H*P*H.transpose() + Q;
         K = P*H.transpose()*S.inverse();
 
-        // correction
-        X = X + K*(Y - hx);
+        // correction - new
+        Eigen::VectorXd KR(N_STATES);
+        KR = K*(Y - hx);
+
+        X.block(0,0,3,1) = X.block(0,0,3,1) + KR.block(0,0,3,1);
+        X(3) = atan2(sin(X(3) + KR(3)), cos(X(3) + KR(3)));
+        X(4) = atan2(sin(X(4) + KR(4)), cos(X(4) + KR(4)));
+        X(5) = atan2(sin(X(5) + KR(5)), cos(X(5) + KR(5)));
+        X.block(6,0,6,1) = X.block(6,0,6,1) + KR.block(6,0,6,1);
+
+        // X = X + K*(Y - hx);
         P = P - K*H*P;
 
         // last measurement
@@ -373,7 +430,7 @@ public:
         // state: {x, y, z, roll, pitch, yaw, vx, vy, vz, wx, wy, wz}
         //        {         (world)         }{        (body)        }
         Eigen::Matrix3d R, Rx, Ry, Rz, J;
-        Eigen::VectorXd xp(N_STATES);
+        Eigen::VectorXd xp(N_STATES), x2(N_STATES), Ax2dt(6);
         Eigen::MatrixXd A(6,6);    
 
         // Rotation matrix
@@ -392,8 +449,18 @@ public:
         A.block(0,0,3,3) = R;
         A.block(3,3,3,3) = J;
 
-        xp.block(0,0,6,1) = x.block(0,0,6,1) + A*x.block(6,0,6,1)*dt;
-        xp.block(6,0,6,1) = x.block(6,0,6,1);
+        // holonomic restriction
+        x2 = x;
+        x2.block(7,0,4,1) << 0.0, 0.0, 0.0, 0.0;
+
+        // xp.block(0,0,6,1) = x.block(0,0,6,1) + A*x.block(6,0,6,1)*dt;
+        // xp.block(6,0,6,1) = x.block(6,0,6,1);
+        Ax2dt = A*x2.block(6,0,6,1)*dt;
+        xp.block(0,0,3,1) = x2.block(0,0,3,1) + Ax2dt.block(0,0,3,1);
+        xp(3) = atan2(sin(x2(3) + Ax2dt(3)), cos(x2(3) + Ax2dt(3)));
+        xp(4) = atan2(sin(x2(4) + Ax2dt(4)), cos(x2(4) + Ax2dt(4)));
+        xp(5) = atan2(sin(x2(5) + Ax2dt(5)), cos(x2(5) + Ax2dt(5)));
+        xp.block(6,0,6,1) = x2.block(6,0,6,1);
 
         return xp;
     }
@@ -540,7 +607,7 @@ public:
 
         // time
         imu_dt = imuTimeCurrent - imuTimeLast;
-        imu_dt = 0.01;
+        // imu_dt = 0.01;
 
         // header
         double timediff = ros::Time::now().toSec() - timeL + imuTimeCurrent;
@@ -572,7 +639,7 @@ public:
 
         // time
         wheel_dt = wheelTimeCurrent - wheelTimeLast;
-        wheel_dt = 0.05;
+        // wheel_dt = 0.05;
 
         // header
         double timediff = ros::Time::now().toSec() - timeL + wheelTimeCurrent;
@@ -611,7 +678,7 @@ public:
 
         // time
         lidar_dt = lidarTimeCurrent - lidarTimeLast;
-        lidar_dt = 0.1;
+        // lidar_dt = 0.1;
 
         // header
         double timediff = ros::Time::now().toSec() - timeL + lidarTimeCurrent;
@@ -715,6 +782,11 @@ public:
         double t_last = ros::Time::now().toSec();
         double t_now;
         double dt_now;
+        bool pub_lidar, pub_wheel, pub_imu, pub_pred;
+        pub_lidar = false;
+        pub_wheel = false;
+        pub_imu = false;
+        pub_pred = false;
 
         while (ros::ok())
         {
@@ -730,7 +802,8 @@ public:
                 
                 // publish state
                 if (filterFreq == "p"){
-                    publish_odom('p');
+                     // publish_odom('p');
+                     pub_pred =  true;
                 }
             }
 
@@ -741,7 +814,8 @@ public:
 
                 // publish state
                 if (filterFreq == "i"){
-                    publish_odom('i');
+                    // publish_odom('i');
+                    pub_imu =  true;
                 }
 
                 // control variable
@@ -754,7 +828,8 @@ public:
                 correction_wheel_stage(wheel_dt);
 
                 if (filterFreq == "w"){
-                    publish_odom('w');
+                    // publish_odom('w');
+                    pub_wheel = true;
                 }                
 
                 // control variable
@@ -768,13 +843,29 @@ public:
 
                 // publish state
                 if (filterFreq == "l"){
-                    publish_odom('l');
+                    // publish_odom('l');
+                    pub_lidar = true;
                 }
 
                 // controle variable
                 lidarNew =  false;
             }
             
+            // publishing
+            if (pub_pred){
+                publish_odom('p');
+                pub_pred = false;
+            }else if (pub_lidar){
+                publish_odom('l');
+                pub_lidar =  false;
+            }else if (pub_wheel){
+                publish_odom('w');
+                pub_wheel = false;
+            }else if (pub_imu){
+                publish_odom('i');
+                pub_imu = false;
+            }
+
             ros::spinOnce();
             r.sleep();        
         }
